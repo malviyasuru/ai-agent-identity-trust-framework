@@ -1,4 +1,4 @@
-# ai-agent-identity-trust-framework
+<img width="1536" height="1024" alt="A2A verification flow" src="https://github.com/user-attachments/assets/88cfa0e8-abaa-40bb-8e16-ee82922a92ab" /># ai-agent-identity-trust-framework
 
 # Global Identity and Trust Framework for Agentic AI
 
@@ -369,6 +369,8 @@ AGENT A (Requesting)                                    AGENT B (Target)
   9. SECURE CHANNEL  → Mutual verification, establish TLS    │
  10. AGENT INTERACT  → Exchange tasks/data via MCP / A2A     │
 ```
+![Uploading A2A verification<img width="1536" height="1024" alt="identiy and trust registry" src="https://github.com/user-attachments/assets/f259064b-a867-462a-b93b-0d9966acf331" />
+ flow.png…]()
 
 **What is verified at each step:**
 
@@ -612,6 +614,8 @@ The layered identity model is designed to accommodate all three without breaking
 | Governance | Policies + Audit Trails |
 
 ---
+<img width="1536" height="1024" alt="A2A verification flow" src="https://github.com/user-attachments/assets/a06831c2-7fbf-4269-8e4f-976f9450d128" />
+<img width="1536" height="1024" alt="identiy and trust registry" src="https://github.com/user-attachments/assets/6d0a7f4b-abc9-465b-93e9-7e4ad5f4b153" />
 
 ## References
 
