@@ -634,26 +634,13 @@ This concept note is a working document. Implementation specifics may vary based
 
 
 Source of Information
-┌─────────────────────────────────────────────────────┐
-│                                                     │
-│   WHO PROVIDES IT          WHAT                     │
-│                                                     │
-│   Agent Owner / Developer  Name, type, owner,       │
-│   (at registration time)   capabilities, endpoints  │
-│                                                     │
-│   Build Pipeline           Model hash, code hash,   │
-│   (CI/CD system)           provenance hash,         │
-│                            training dataset hash    │
-│                                                     │
-│   Runtime / Infrastructure Instance ID,             │
-│   (deployment system)      runtime hash,            │
-│                            hardware attestation     │
-│                            (TPM/TEE)                │
-│                                                     │
-│   Trust Service            Trust score              │
-│   (computed, not provided) (computed from behavior) │
-│                                                     │
-└─────────────────────────────────────────────────────┘
+| **Who Provides It**                              | **When**              | **What**                                                      |
+| ------------------------------------------------ | --------------------- | ------------------------------------------------------------- |
+| **Agent Owner / Developer**                      | At registration time  | Name, type, owner, capabilities, endpoints                    |
+| **Build Pipeline (CI/CD System)**                | At every build        | Model hash, code hash, provenance hash, training dataset hash |
+| **Runtime / Infrastructure (Deployment System)** | At every deployment   | Instance ID, runtime hash, hardware attestation (TPM/TEE)     |
+| **Trust Service**                                | Computed continuously | Trust score (computed from behavior, not provided directly)   |
+
 
 Registration Flow:
 Stage 1 - Developer registers the agent (happens once)
