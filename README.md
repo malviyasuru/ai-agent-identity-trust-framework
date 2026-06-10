@@ -630,3 +630,162 @@ The layered identity model is designed to accommodate all three without breaking
 ## License
 
 This concept note is a working document. Implementation specifics may vary based on deployment context, regulatory requirements, and organizational needs.
+
+
+
+Source of Information
+┌─────────────────────────────────────────────────────┐
+│                                                     │
+│   WHO PROVIDES IT          WHAT                     │
+│                                                     │
+│   Agent Owner / Developer  Name, type, owner,       │
+│   (at registration time)   capabilities, endpoints  │
+│                                                     │
+│   Build Pipeline           Model hash, code hash,   │
+│   (CI/CD system)           provenance hash,         │
+│                            training dataset hash    │
+│                                                     │
+│   Runtime / Infrastructure Instance ID,             │
+│   (deployment system)      runtime hash,            │
+│                            hardware attestation     │
+│                            (TPM/TEE)                │
+│                                                     │
+│   Trust Service            Trust score              │
+│   (computed, not provided) (computed from behavior) │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+
+Registration Flow:
+Stage 1 - Developer registers the agent (happens once)
+A developer or organization calls the registry at deploy time. They provide the basics - name, type, owner, capabilites, endpoints. The registry generates the AGID + DID + key pair. This is like getting a birth certificate.
+
+Developer/CI  →  POST /api/v1/agents/
+                 { name, type, owner, capabilities, endpoints }
+              ←  { agid, did, public_key, private_key (once!) }
+
+
+                  POST /api/v1/agents/
+                  {
+                    "name": "Claim Processing Agent",
+                    "agent_type": "tool_using",
+                    "owner_id": "did:web:yourorg.com:teams:claims",
+                    "owner_org": "Your Organisation",
+                    "capabilities": {
+                      "actions": ["read", "write"],
+                      "domains": ["insurance", "claims"],
+                      "tools": ["claims-db", "document-parser"]
+                    },
+                    "mcp_endpoint": "https://claim-agent.yourorg.com/mcp",
+                    "a2a_endpoint": "https://claim-agent.yourorg.com/a2a"
+                  }
+                  
+Stage 2 - Build pipeline attests the model and code (at every build)
+When the agent is build or fine-tuned, the CI/CD pipeline computes hashes of the model weights, code, training data, etc. and calls the registry to attach these. This is like getting quality certification stamped on a product at the factory.
+
+CI/CD Pipeline →  PATCH /api/v1/agents/{agid}/attestation
+                  { model_hash, code_hash, provenance_hash,
+                    signed by pipeline's private key }
+               ←  { version_id updated, attestation stored }
+
+               # In  CI/CD script (GitHub Actions, GitLab CI, Jenkins, anything)
+
+                  MODEL_HASH=$(sha256sum model.bin | cut -d' ' -f1)
+                  CODE_HASH=$(git rev-parse HEAD)
+                  PROVENANCE_HASH=$(sha256sum training_manifest.json | cut -d' ' -f1)
+                  
+                  curl -X PATCH https://registry.yourorg.com/api/v1/agents/$AGID/attestation \
+                    -H "Authorization: Bearer $PIPELINE_TOKEN" \
+                    -d '{
+                      "model_hash": "'$MODEL_HASH'",
+                      "code_hash": "'$CODE_HASH'",
+                      "provenance_hash": "'$PROVENANCE_HASH'",
+                      "model_provider": "anthropic",
+                      "model_name": "claude-sonnet-4-6"
+                    }'
+
+Stage 3 - Runtime environment registers the deployment (at every deployment)
+When the agent actually starts running - in a container, on a specific machine - the infrastructure computes the runtime hash and optionally gets hardware attestation from TPM/TEE. It calls the registry to register this instance.
+Infrastructure →  POST /api/v1/agents/{agid}/instances
+                  { deployment_env, runtime_hash, container_hash,
+                    hardware_attestation (TPM quote) }
+               ←  { instance_id, ready to operate }
+
+               # startup.py — runs when the agent container boots
+
+                  import hashlib, os, httpx
+                  
+                  runtime_hash = hashlib.sha256(
+                      open("/proc/self/exe", "rb").read()  # hash of the running binary
+                  ).hexdigest()
+                  
+                  httpx.post(
+                      f"{REGISTRY_URL}/api/v1/agents/{AGID}/instances",
+                      json={
+                          "runtime_hash": runtime_hash,
+                          "container_hash": os.environ.get("IMAGE_DIGEST"),
+                          "deployment_environment": os.environ.get("ENV", "production"),
+                      },
+                      headers={"Authorization": f"Bearer {sign_with_private_key(AGID)}"}
+                  )
+
+Agents are rarely one model: model hash for each agent type
+1. Static/Reactive agent: One model, one hash.
+   "model_hashes": {
+      "primary": "sha256:abc123..."
+    },
+    "composite_model_hash": "sha256:abc123..."
+   
+3. Tool-using agent (React Style)
+   Typically has a reasoning model plus an embedding model for RAG retrieval, sometime a reranker. Each needs its own hash.
+   "model_hashes": {
+      "reasoning": "anthropic:claude-sonnet-4-6:20250514",
+      "embedding": "sha256:def456...",   ← local model, hashable
+      "reranker":  "sha256:ghi789..."    ← optional
+    },
+    "composite_model_hash": "sha256(reasoning+embedding+reranker)"
+   
+4. Adaptive/Learning agent:
+   The model changes over time through fine-tuning or RL. The base model hash stays stable but the adapter hash changes on every retrain.
+   Every time the adapter is updated. composite_model_hash changes -> version_id changes -> the registry records a new version. The history of all previous version_id values is full training lineage - it can trace back the agent to any point in time.
+   "model_hashes": {
+      "base_model":    "sha256:abc123...",   ← never changes
+      "lora_adapter":  "sha256:xyz999...",   ← changes every retrain
+      "rl_checkpoint": "sha256:qqq111..."    ← changes every update
+    },
+    "composite_model_hash": "sha256(base+adapter+checkpoint)"
+   
+5. Deliberative/Planner agent
+   Uses different models for different stages of reasoning - a large capable model for planning, a smaller faster one for execution, sometimes a third for verification.
+   if the organization decides to swape the executor from Haiku to Sonnet to save cost, that is a meaningful identity change - it changes the composite_model_hash and produces a new version_id.
+   The trust score may need re-evaluation because behaviour could differ.
+   "model_hashes": {
+      "planner":  "anthropic:claude-opus-4-6:20250514",
+      "executor": "anthropic:claude-haiku-4-5:20251001",
+      "verifier": "sha256:localmodel..."
+    },
+    "composite_model_hash": "sha256(planner+executor+verifier)"
+   
+6. Human-delegated agent
+   Always has atleast two models - the main reasoning model and a safety/guardrails classifier. The safety model hash is arguable more important that the main model hash from a trust perspective.
+   "model_hashes": {
+      "reasoning":        "anthropic:claude-sonnet-4-6:20250514",
+      "safety_classifier":"sha256:guardrails-model...",
+      "pii_detector":     "sha256:pii-model..."
+    },
+    "composite_model_hash": "sha256(all three)",
+    "safety_model_verified": true   ← explicit flag for trust scoring
+   
+7. Multi-agent/Hierarchical system
+   Here "don't try to create one identity for the whole system". Each agent in the system has its own AGID, its own models, its own trust score. The orchestrator's identity links to sub-agents via its capability_hash.
+   When Agent X wants to talk to this multi-agent system, it verifies the orchestrator's identity. The Orchestrator's capability_hash proves which sub-agents it's allowed to delegate to. Each sub-agent then independently verifies itself in the A2A flow.
+   Orchestrator AGID: agid:111...
+      model_hashes: { reasoning: "claude-opus..." }
+      capability_hash: sha256(["can_delegate:agid:222", "can_delegate:agid:333"])
+                              ↑ links to sub-agents
+    
+    Sub-agent A AGID: agid:222...
+      model_hashes: { reasoning: "claude-haiku...", embedding: "sha256:..." }
+    
+    Sub-agent B AGID: agid:333...
+      model_hashes: { reasoning: "gpt-4o...", classifier: "sha256:..." }
+
