@@ -643,6 +643,7 @@ Source of Information
 
 
 Registration Flow:
+
 Stage 1 - Developer registers the agent (happens once)
 A developer or organization calls the registry at deploy time. They provide the basics - name, type, owner, capabilites, endpoints. The registry generates the AGID + DID + key pair. This is like getting a birth certificate.
 
